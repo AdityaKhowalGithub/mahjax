@@ -429,6 +429,7 @@ function syncNoCallsControl(state) {
 
 function applyLocaleToStaticElements() {
   const locale = getLocale();
+  document.documentElement.lang = locale.code;
   if (handTitleEl) handTitleEl.textContent = locale.sections.hand;
   if (flowerTitleEl) flowerTitleEl.textContent = locale.sections.flowers;
   if (actionTitleEl) actionTitleEl.textContent = locale.sections.actions;

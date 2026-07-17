@@ -42,6 +42,8 @@ def test_index_exposes_hong_kong_rules_and_flower_area() -> None:
 
     assert 'value="hong_kong_mahjong"' in response
     assert 'id="flowerTiles"' in response
+    assert 'translate="no"' in response
+    assert 'name="google" content="notranslate"' in response
 
 
 def test_create_hong_kong_game_returns_native_ui_contract() -> None:
