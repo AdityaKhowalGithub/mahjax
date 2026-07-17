@@ -143,6 +143,7 @@ section.card {
 #boardPane,
 #infoPane {
   width: 100%;
+  box-sizing: border-box;
 }
 
 #board {
