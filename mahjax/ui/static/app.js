@@ -13,6 +13,9 @@ const endBtn = document.getElementById('endBtn');
 
 const boardEl = document.getElementById('board');
 const handTilesEl = document.getElementById('handTiles');
+const flowerAreaEl = document.getElementById('flowerArea');
+const flowerTitleEl = document.getElementById('flowerTitle');
+const flowerTilesEl = document.getElementById('flowerTiles');
 const actionButtonsEl = document.getElementById('actionButtons');
 const callButtonsEl = document.getElementById('callButtons');
 const kanButtonsEl = document.getElementById('kanButtons');
@@ -45,6 +48,7 @@ const controlTextRefs = {
   end: document.querySelector('[data-i18n="controls.end"]'),
 };
 const envOptionRefs = {
+  hong_kong_mahjong: document.querySelector('[data-i18n-env="hong_kong_mahjong"]'),
   no_red_mahjong: document.querySelector('[data-i18n-env="no_red_mahjong"]'),
   red_mahjong: document.querySelector('[data-i18n-env="red_mahjong"]'),
 };
@@ -80,6 +84,7 @@ const I18N = {
     },
     sections: {
       hand: '手牌',
+      flowers: '花牌・季節牌',
       actions: 'アクション',
       score: 'スコア',
       events: 'ログ',
@@ -110,6 +115,7 @@ const I18N = {
         north: '北',
       },
       envs: {
+        hong_kong_mahjong: '香港旧式 (HKOS)',
         no_red_mahjong: '赤なし',
         red_mahjong: '赤あり',
       },
@@ -128,6 +134,17 @@ const I18N = {
       addedKan: '加槓',
       advanceFinal: '終局',
       advanceNext: '次の局へ',
+    },
+    hkActions: {
+      discardDrawn: 'ツモ牌を捨てる',
+      selfDraw: '自摸和',
+      win: '和了',
+      pass: '見送る',
+      pong: '碰',
+      chow: '上',
+      openKong: '明槓',
+      closedKong: '暗槓',
+      addedKong: '加槓',
     },
     statuses: {
       idle: 'Choose settings and start a game.',
@@ -153,6 +170,7 @@ const I18N = {
       yakuLabel: '役',
       yakuman: (count) => `${count}倍役満`,
       fanFu: (fan, fu) => `${fan}翻 ${fu}符`,
+      faan: (faan) => `${faan}翻`,
       dora: (dora, uraDora, includeUra = true) => {
         if (includeUra && typeof uraDora === 'number') {
           if (dora > 0 && uraDora > 0) {
@@ -202,6 +220,7 @@ const I18N = {
     },
     sections: {
       hand: 'Hand',
+      flowers: 'Flowers & Seasons',
       actions: 'Actions',
       score: 'Score',
       events: 'Log',
@@ -232,6 +251,7 @@ const I18N = {
         north: 'North',
       },
       envs: {
+        hong_kong_mahjong: 'Hong Kong Old Style',
         no_red_mahjong: 'No red fives',
         red_mahjong: 'With red fives',
       },
@@ -250,6 +270,17 @@ const I18N = {
       addedKan: 'Added Kan',
       advanceFinal: 'End Game',
       advanceNext: 'Next Round',
+    },
+    hkActions: {
+      discardDrawn: 'Discard drawn tile',
+      selfDraw: 'Self draw',
+      win: 'Win',
+      pass: 'Pass',
+      pong: 'Pong',
+      chow: 'Chow',
+      openKong: 'Exposed kong',
+      closedKong: 'Concealed kong',
+      addedKong: 'Added kong',
     },
     statuses: {
       idle: 'Choose settings and start a game.',
@@ -275,6 +306,7 @@ const I18N = {
       yakuLabel: 'Yaku',
       yakuman: (count) => `${count}x Yakuman`,
       fanFu: (fan, fu) => `${fan} han ${fu} fu`,
+      faan: (faan) => `${faan} faan`,
       dora: (dora, uraDora, includeUra = true) => {
         if (includeUra && typeof uraDora === 'number') {
           if (dora > 0 && uraDora > 0) {
@@ -398,6 +430,7 @@ function syncNoCallsControl(state) {
 function applyLocaleToStaticElements() {
   const locale = getLocale();
   if (handTitleEl) handTitleEl.textContent = locale.sections.hand;
+  if (flowerTitleEl) flowerTitleEl.textContent = locale.sections.flowers;
   if (actionTitleEl) actionTitleEl.textContent = locale.sections.actions;
   if (scoreTitleEl) scoreTitleEl.textContent = locale.sections.score;
   if (eventsTitleEl) eventsTitleEl.textContent = locale.sections.events;
@@ -619,6 +652,8 @@ async function endGame() {
 function clearBoard() {
   boardEl.innerHTML = '';
   handTilesEl.innerHTML = '';
+  flowerTilesEl.innerHTML = '';
+  flowerAreaEl.hidden = true;
   actionButtonsEl.innerHTML = '';
   callButtonsEl.innerHTML = '';
   kanButtonsEl.innerHTML = '';
@@ -856,6 +891,17 @@ function normalizeBoardSvg() {
 
 function renderHand(state) {
   handTilesEl.innerHTML = '';
+  flowerTilesEl.innerHTML = '';
+  const flowers = Array.isArray(state.hand?.flowers) ? state.hand.flowers : [];
+  flowerAreaEl.hidden = flowers.length === 0;
+  flowers.forEach((flower) => {
+    const tile = document.createElement('span');
+    tile.className = 'flower-tile';
+    tile.textContent = currentLanguage === Languages.EN
+      ? flower.labelEnglish
+      : flower.label;
+    flowerTilesEl.appendChild(tile);
+  });
   if (!state.hand || !state.hand.sequence) return;
   const discardMap = new Map();
   if (state.legalActions && state.legalActions.discardTiles) {
@@ -888,6 +934,9 @@ function renderHand(state) {
     const btn = document.createElement('button');
     btn.className = 'tile-btn draw-separated last-draw';
     btn.textContent = `${tileLabel(drawTile)}`;
+    if (state.envId === 'hong_kong_mahjong') {
+      btn.title = getLocale().hkActions.discardDrawn;
+    }
     const enabled = discardMap.get(drawTile);
     if (!enabled) {
       btn.classList.add('disabled');
@@ -906,9 +955,11 @@ function renderActions(state) {
   if (!state.legalActions) return;
 
   const locale = getLocale();
+  const isHongKong = state.envId === 'hong_kong_mahjong';
+  const labels = isHongKong ? locale.hkActions : locale.actions;
   const { riichi, tsumogiri, tsumo, ron, pass: passAct } = state.legalActions;
 
-  if (tsumogiri) {
+  if (tsumogiri && !isHongKong) {
     const btn = createActionButton(locale.actions.tsumogiri, tsumogiri.enabled);
     if (tsumogiri.enabled) attachSendAction(btn, tsumogiri.action, 'special');
     actionButtonsEl.appendChild(btn);
@@ -918,27 +969,31 @@ function renderActions(state) {
     if (riichi.enabled) attachSendAction(btn, riichi.action, 'special');
     actionButtonsEl.appendChild(btn);
   }
-  if (tsumo) {
-    const btn = createActionButton(locale.actions.tsumo, tsumo.enabled);
+  if (tsumo && (!isHongKong || tsumo.enabled)) {
+    const btn = createActionButton(isHongKong ? labels.selfDraw : labels.tsumo, tsumo.enabled);
     if (tsumo.enabled) attachSendAction(btn, tsumo.action, 'special');
     actionButtonsEl.appendChild(btn);
   }
-  if (ron) {
+  if (ron && (!isHongKong || ron.enabled)) {
     const tileText = typeof ron.target === 'number' ? tileLabel(ron.target) : ron.targetLabel;
-    const label = tileText ? `${locale.actions.ron} ${tileText}` : locale.actions.ron;
+    const ronLabel = isHongKong ? labels.win : labels.ron;
+    const label = tileText ? `${ronLabel} ${tileText}` : ronLabel;
     const btn = createActionButton(label, ron.enabled);
     if (ron.enabled) attachSendAction(btn, ron.action, 'special');
     actionButtonsEl.appendChild(btn);
   }
-  if (passAct) {
-    const btn = createActionButton(locale.actions.pass, passAct.enabled);
+  if (passAct && (!isHongKong || passAct.enabled)) {
+    const btn = createActionButton(labels.pass, passAct.enabled);
     if (passAct.enabled) attachSendAction(btn, passAct.action, 'special');
     actionButtonsEl.appendChild(btn);
   }
 
   if (state.legalActions.kan && state.legalActions.kan.length) {
     state.legalActions.kan.forEach((item) => {
-      const kindLabel = translateKanKind(item.kind);
+      let kindLabel = translateKanKind(item.kind);
+      if (isHongKong) {
+        kindLabel = item.kind === '加槓' ? labels.addedKong : labels.closedKong;
+      }
       const label = `${kindLabel} ${tileLabel(item.tile)}`;
       const btn = createActionButton(label, true);
       attachSendAction(btn, item.action, 'special');
@@ -948,20 +1003,23 @@ function renderActions(state) {
 
   const call = state.legalActions.call || {};
   if (call.pon) {
-    const label = `${locale.actions.pon} ${formatTileSequence(call.pon.tiles || [])}`;
+    const actionLabel = isHongKong ? labels.pong : labels.pon;
+    const label = `${actionLabel} ${formatTileSequence(call.pon.tiles || [])}`;
     const btn = createActionButton(label || locale.actions.pon, true);
     attachSendAction(btn, call.pon.action, 'special');
     callButtonsEl.appendChild(btn);
   }
   if (call.open_kan) {
-    const label = `${locale.actions.openKan} ${formatTileSequence(call.open_kan.tiles || [])}`;
+    const actionLabel = isHongKong ? labels.openKong : labels.openKan;
+    const label = `${actionLabel} ${formatTileSequence(call.open_kan.tiles || [])}`;
     const btn = createActionButton(label || locale.actions.openKan, true);
     attachSendAction(btn, call.open_kan.action, 'special');
     callButtonsEl.appendChild(btn);
   }
   if (Array.isArray(call.chi)) {
     call.chi.forEach((item) => {
-      const label = `${locale.actions.chi} ${formatTileSequence(item.tiles || [])}`;
+      const actionLabel = isHongKong ? labels.chow : labels.chi;
+      const label = `${actionLabel} ${formatTileSequence(item.tiles || [])}`;
       const btn = createActionButton(label || locale.actions.chi, true);
       attachSendAction(btn, item.action, 'special');
       callButtonsEl.appendChild(btn);
@@ -1033,6 +1091,7 @@ function appendEvents(state, events) {
       const relIdx = relativeIndex(state, evt.player);
       eventHistory.unshift({
         ...evt,
+        envId: state.envId,
         relativeIndex: relIdx,
       });
     });
@@ -1049,7 +1108,7 @@ function renderEventList() {
     const time = new Date(evt.timestamp * 1000).toLocaleTimeString();
     const relLabel = relativeSeatLabel(evt.relativeIndex);
     const name = evt.relativeIndex === 0 ? locale.you : evt.playerName;
-    const description = translateEventDescription(evt.description);
+    const description = translateEventDescription(evt.description, evt.envId);
     li.textContent = `[${time}] ${relLabel}(${name}) ${description}`;
     eventListEl.appendChild(li);
   });
@@ -1065,6 +1124,7 @@ function renderRoundSummary(state) {
   }
   pendingSummaryData = {
     summary,
+    envId: state.envId,
     playerNames: Array.isArray(state.playerNames) ? [...state.playerNames] : [],
     winds: Array.isArray(state.winds) ? [...state.winds] : [],
     scores: Array.isArray(state.scores) ? [...state.scores] : [],
@@ -1084,7 +1144,7 @@ function showRoundSummary() {
 }
 
 function updateSummaryOverlay(data) {
-  const { summary, playerNames, winds, scores, rewards, rankOrder, humanSeat } = data;
+  const { summary, envId, playerNames, winds, scores, rewards, rankOrder, humanSeat } = data;
   const locale = getLocale();
   const reasonLabel = summaryReasonLabel(summary.reason);
   summaryTitle.textContent = summary.isGameEnd
@@ -1170,7 +1230,7 @@ function updateSummaryOverlay(data) {
         yaku.textContent = `${locale.summary.yakuLabel}: ${yakuList.join(', ')}`;
         section.appendChild(yaku);
       }
-      if (winner.dora !== undefined || winner.uraDora !== undefined) {
+      if (winner.showDora !== false && (winner.dora !== undefined || winner.uraDora !== undefined)) {
         const doraCount = Number.isFinite(winner.dora) ? winner.dora : 0;
         const uraDoraCount = Number.isFinite(winner.uraDora) ? winner.uraDora : 0;
         const doraLine = document.createElement('div');
@@ -1193,7 +1253,9 @@ function updateSummaryOverlay(data) {
         }
       }
       const detail = document.createElement('div');
-      if (winner.yakuman > 0) {
+      if (envId === 'hong_kong_mahjong') {
+        detail.textContent = locale.summary.faan(winner.fan);
+      } else if (winner.yakuman > 0) {
         detail.textContent = locale.summary.yakuman(winner.yakuman);
       } else {
         detail.textContent = locale.summary.fanFu(winner.fan, winner.fu);
@@ -1216,9 +1278,11 @@ function updateSummaryOverlay(data) {
     });
   }
 
-  const meta = document.createElement('div');
-  meta.textContent = locale.summary.meta(summary.honba, summary.kyotaku);
-  body.appendChild(meta);
+  if (envId !== 'hong_kong_mahjong') {
+    const meta = document.createElement('div');
+    meta.textContent = locale.summary.meta(summary.honba, summary.kyotaku);
+    body.appendChild(meta);
+  }
 
   summaryBody.innerHTML = '';
   summaryBody.appendChild(body);
@@ -1293,9 +1357,20 @@ function translateWindName(wind) {
   return locale.winds[wind] || wind;
 }
 
-function translateEventDescription(description) {
-  if (currentLanguage === Languages.JA) return description;
+function translateEventDescription(description, envId) {
   if (!description) return '';
+  if (envId === 'hong_kong_mahjong') {
+    const hk = getLocale().hkActions;
+    if (description === 'ツモ切り') return hk.discardDrawn;
+    if (description === '自摸') return hk.selfDraw;
+    if (description.startsWith('ロン')) return description.replace('ロン', hk.win);
+    if (description.startsWith('ポン')) return description.replace('ポン', hk.pong);
+    if (description.startsWith('明槓')) return description.replace('明槓', hk.openKong);
+    if (description.startsWith('カン')) return description.replace('カン', hk.closedKong);
+    if (description.startsWith('チー')) return description.replace('チー', hk.chow);
+    if (description === 'パス') return hk.pass;
+  }
+  if (currentLanguage === Languages.JA) return description;
   if (description.startsWith('打 ')) {
     return `Discard ${description.slice(2)}`;
   }

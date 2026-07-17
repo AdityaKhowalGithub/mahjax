@@ -125,6 +125,10 @@ uvicorn mahjax.ui.app:create_app --host 0.0.0.0 --port 8000
 ```
 Open http://localhost:8000 to start playing. The default agents are the random and `rule_based` ones.
 
+Choose **Hong Kong Old Style** in the Rules selector and start a game to render
+the HKOS table. The board shows the three-faan minimum and remaining wall, while
+dealt flowers and seasons appear alongside the playable hand.
+
 ### Playing Against Your Agent
 You can register your trained agent to appear in the UI's agent selector.
 Create a Python script (e.g., `my_app.py`) and register your agent's `act` function:
