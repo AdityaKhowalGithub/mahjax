@@ -118,15 +118,15 @@ button.danger {
 }
 
 .language-btn:not(:disabled) {
-  background: #2f8de3;
-  border-color: #2f8de3;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
 .language-btn:disabled {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.25);
-  color: rgba(255, 255, 255, 0.75);
-  opacity: 0.85;
+  background: #2f8de3;
+  border-color: #2f8de3;
+  color: #fff;
+  opacity: 1;
 }
 
 section.card {
