@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" translate="no">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="google" content="notranslate" />
   <title>MahJax Simulator UI</title>
-  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=0.1.3" />
 </head>
 <body>
   <header>
@@ -17,6 +18,7 @@
       <label>
         <span data-i18n="controls.env">Rules</span>
         <select id="envSelect">
+          <option value="hong_kong_mahjong" data-i18n-env="hong_kong_mahjong">香港旧式</option>
           <option value="no_red_mahjong" data-i18n-env="no_red_mahjong">赤なし</option>
           <option value="red_mahjong" data-i18n-env="red_mahjong">赤あり</option>
         </select>
@@ -80,6 +82,10 @@
         <div id="handArea">
           <h2 id="handTitle">手牌</h2>
           <div id="handTiles"></div>
+          <div id="flowerArea" hidden>
+            <h3 id="flowerTitle">花牌・季節牌</h3>
+            <div id="flowerTiles"></div>
+          </div>
         </div>
         <div id="actionArea">
           <h3 id="actionTitle">アクション</h3>
@@ -118,6 +124,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js" type="module"></script>
+  <script src="/static/app.js?v=0.1.3" type="module"></script>
 </body>
 </html>

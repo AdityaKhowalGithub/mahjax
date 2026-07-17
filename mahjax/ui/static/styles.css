@@ -118,15 +118,15 @@ button.danger {
 }
 
 .language-btn:not(:disabled) {
-  background: #2f8de3;
-  border-color: #2f8de3;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
 .language-btn:disabled {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.25);
-  color: rgba(255, 255, 255, 0.75);
-  opacity: 0.85;
+  background: #2f8de3;
+  border-color: #2f8de3;
+  color: #fff;
+  opacity: 1;
 }
 
 section.card {
@@ -143,6 +143,7 @@ section.card {
 #boardPane,
 #infoPane {
   width: 100%;
+  box-sizing: border-box;
 }
 
 #board {
@@ -175,6 +176,33 @@ section.card {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 2px;
+}
+
+#flowerArea {
+  margin-top: 8px;
+}
+
+#flowerArea h3 {
+  margin: 0 0 4px;
+  font-size: 0.9rem;
+}
+
+#flowerTiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.flower-tile {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  padding: 4px 9px;
+  border: 1px solid rgba(255, 199, 64, 0.65);
+  border-radius: 6px;
+  background: #fff4c9;
+  color: #263238;
+  font-weight: 700;
 }
 
 #board svg {

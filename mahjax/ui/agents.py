@@ -21,16 +21,17 @@ import importlib.util
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 import jax
 import jax.numpy as jnp
 
+from mahjax.hong_kong_mahjong.players import rule_based_player as hk_rule_based_player
 from mahjax.no_red_mahjong.players import rule_based_player
-from mahjax.red_mahjong.players import rule_based_player as red_rule_based_player
 from mahjax.no_red_mahjong.state import State
+from mahjax.red_mahjong.players import rule_based_player as red_rule_based_player
 
-AgentFn = Callable[[State, jnp.ndarray], jnp.ndarray]
+AgentFn = Callable[[Any, jnp.ndarray], jnp.ndarray]
 
 
 @dataclass
@@ -49,6 +50,12 @@ class AgentRegistry:
         self._register_builtin_agents()
 
     def _register_builtin_agents(self) -> None:
+        self.add_agent(
+            agent_id="rule_based_hk",
+            name="Rule-based (Hong Kong)",
+            description="Heuristic rule-based agent for Hong Kong Old Style mahjong.",
+            act=_rule_based_hk_act,
+        )
         self.add_agent(
             agent_id="rule_based",
             name="Rule-based",
@@ -151,6 +158,10 @@ def _rule_based_act(state: State, rng: jnp.ndarray) -> jnp.ndarray:
 
 def _rule_based_red_act(state: State, rng: jnp.ndarray) -> jnp.ndarray:
     return jnp.asarray(jax.jit(red_rule_based_player)(state, rng), dtype=jnp.int32)
+
+
+def _rule_based_hk_act(state: Any, rng: jnp.ndarray) -> jnp.ndarray:
+    return jnp.asarray(jax.jit(hk_rule_based_player)(state, rng), dtype=jnp.int32)
 
 
 def _random_act(state: State, rng: jnp.ndarray) -> jnp.ndarray:

@@ -23,12 +23,22 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from mahjax._src.visualizer import _to_red_env_state
+from mahjax.hong_kong_mahjong.action import Action as HKAction
+from mahjax.hong_kong_mahjong.env import HongKongMahjong, _score_result
+from mahjax.hong_kong_mahjong.rules import HKOS_V1
+from mahjax.hong_kong_mahjong.visualization import (
+    FLOWERS_EN,
+    FLOWERS_JA,
+)
+from mahjax.hong_kong_mahjong.visualization import (
+    render_round_svg as render_hk_round_svg,
+)
 from mahjax.no_red_mahjong.action import Action
 from mahjax.no_red_mahjong.env import _dora_array
 from mahjax.no_red_mahjong.state import DORA_ARRAY, FIRST_DRAW_IDX, State
 from mahjax.no_red_mahjong.tile import Tile
 from mahjax.no_red_mahjong.yaku import Yaku
-from mahjax._src.visualizer import _to_red_env_state
 from mahjax.red_mahjong.action import Action as RedAction
 from mahjax.red_mahjong.env import RedMahjong
 from mahjax.red_mahjong.env import _dora_array as _red_dora_array
@@ -282,6 +292,7 @@ class WinnerSummary:
     yakuman: int
     winning_tile: Optional[int]
     from_player: Optional[int]
+    show_dora: bool = True
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -310,6 +321,7 @@ class WinnerSummary:
                 tile_label(self.winning_tile) if self.winning_tile is not None else None
             ),
             "fromPlayer": self.from_player,
+            "showDora": self.show_dora,
         }
 
 
@@ -353,6 +365,7 @@ class GameSession:
         self.id = uuid.uuid4().hex
         self.env_id = env_id
         self.is_red = env_id == "red_mahjong"
+        self.is_hong_kong = env_id == "hong_kong_mahjong"
         # The action space (and a few action enum values) differs between red
         # and no-red. Use env_id to distinguish, not state attribute presence
         # — both state classes now expose ``players``/``round_state``.
@@ -406,10 +419,12 @@ class GameSession:
         self._pending_events.append(event)
         self.last_action = event
         self._maybe_reveal_after_win(action, int(prev_state.current_player))
-        if self._is_terminated_round(next_state) and not self._is_terminated_round(
-            prev_state
-        ):
-            if self._uses_red_state:
+        if self._did_round_end(prev_state, next_state):
+            if self.is_hong_kong:
+                summary = build_round_summary_hk(
+                    prev_state, next_state, event, self.player_names
+                )
+            elif self._uses_red_state:
                 summary = build_round_summary_red(
                     prev_state, next_state, event, self.player_names
                 )
@@ -454,6 +469,9 @@ class GameSession:
             return
         self.round_summary = None
         self._reveal_hidden_hands = False
+        if self.is_hong_kong:
+            self.auto_play_until_interrupt()
+            return
         steps = 0
         while steps < 8 and self._is_terminated_round(self.state):
             mask = self.state.legal_action_mask
@@ -569,6 +587,8 @@ class GameSession:
         return "awaiting_ai"
 
     def to_view(self) -> Dict[str, Any]:
+        if self.is_hong_kong:
+            return self._to_view_hk()
         if self._uses_red_state:
             return self._to_view_red()
         state = self.state
@@ -641,6 +661,72 @@ class GameSession:
             "step": self.step_counter,
             "hideOpponentHands": self.hide_opponent_hands,
             "autoPassCalls": self.auto_pass_calls,
+        }
+
+    def _to_view_hk(self) -> Dict[str, Any]:
+        state = self.state
+        scores = [int(value) for value in np.array(state.round_state.score)]
+        rewards = [int(value) for value in np.array(state.rewards)]
+        winds = [WIND_NAMES[int(w)] for w in np.array(state.round_state.seat_wind)]
+        rank_order = [int(i) for i in np.argsort([-score for score in scores])]
+        reveal_all_hands = (not self.hide_opponent_hands) or self._should_reveal_hidden_hands()
+        svg_japanese = render_hk_round_svg(
+            state,
+            visible_player=self.human_seat,
+            show_all_hands=reveal_all_hands,
+            tile_style="standard",
+        )
+        svg_english = render_hk_round_svg(
+            state,
+            visible_player=self.human_seat,
+            show_all_hands=reveal_all_hands,
+            tile_style="bilingual",
+        )
+        is_human_turn = int(state.current_player) == self.human_seat
+        legal_view = None
+        if is_human_turn and not state.terminated and self.round_summary is None:
+            legal_view = build_legal_actions_view_hk(state, self.human_seat)
+        advance_view = None
+        if self.round_summary is not None:
+            advance_view = {
+                "enabled": True,
+                "action": None,
+                "label": "終局" if bool(state.terminated) else "次の局へ",
+                "isFinal": bool(state.terminated),
+                "dummyOnly": True,
+            }
+        return {
+            "gameId": self.id,
+            "envId": self.env_id,
+            "phase": self.phase(),
+            "currentPlayer": int(state.current_player),
+            "humanSeat": self.human_seat,
+            "playerNames": self.player_names,
+            "winds": winds,
+            "scores": scores,
+            "rewards": rewards,
+            "rankOrder": rank_order,
+            "svg": svg_japanese,
+            "svgJapanese": svg_japanese,
+            "svgEnglish": svg_english,
+            "legalActions": legal_view,
+            "advanceAction": advance_view,
+            "hand": build_hand_view_hk(state, self.human_seat),
+            "roundSummary": self.round_summary.to_dict() if self.round_summary else None,
+            "events": self.consume_events(),
+            "terminated": bool(state.terminated),
+            "aiDelayMs": self.ai_delay_ms,
+            "step": self.step_counter,
+            "hideOpponentHands": self.hide_opponent_hands,
+            "autoPassCalls": self.auto_pass_calls,
+            "wallRemaining": max(0, 144 - int(state.round_state.wall_index)),
+            "rules": {
+                "id": "hkos-v1",
+                "name": "Hong Kong Old Style",
+                "minimumFaan": int(HKOS_V1.minimum_faan),
+                "maximumFaan": int(HKOS_V1.maximum_faan),
+                "flowers": True,
+            },
         }
 
     def _to_view_red(self) -> Dict[str, Any]:
@@ -717,7 +803,19 @@ class GameSession:
         }
 
     def _is_terminated_round(self, state: Any) -> bool:
+        if self.is_hong_kong:
+            return False
         return bool(state.round_state.terminated_round)
+
+    def _did_round_end(self, prev_state: Any, next_state: Any) -> bool:
+        if self.is_hong_kong:
+            return bool(next_state.terminated) or not np.array_equal(
+                np.array(prev_state.round_state.deck),
+                np.array(next_state.round_state.deck),
+            )
+        return self._is_terminated_round(next_state) and not self._is_terminated_round(
+            prev_state
+        )
 
 
 class GameManager:
@@ -739,9 +837,16 @@ class GameManager:
         auto_pass_calls: bool = False,
     ) -> GameSession:
         agent = self.registry.get(agent_id)
-        if env_id in ("red_mahjong", "no_red_mahjong") and agent.agent_id == "rule_based":
+        if env_id == "hong_kong_mahjong" and agent.agent_id in (
+            "rule_based",
+            "rule_based_red",
+        ):
+            agent = self.registry.get("rule_based_hk")
+        elif env_id in ("red_mahjong", "no_red_mahjong") and agent.agent_id == "rule_based":
             agent = self.registry.get("rule_based_red")
-        if env_id == "red_mahjong":
+        if env_id == "hong_kong_mahjong":
+            env = HongKongMahjong(round_mode=round_mode)
+        elif env_id == "red_mahjong":
             env = RedMahjong(round_mode=round_mode, next_round_style="dummy_share")
         else:
             env = RedMahjong(
@@ -1103,6 +1208,21 @@ def build_legal_actions_view_red(state: Any, player: int) -> Dict[str, Any]:
     }
 
 
+def build_hand_view_hk(state: Any, player: int) -> Dict[str, Any]:
+    view = build_hand_view(state, player)
+    held = np.array(state.players.flowers[player], dtype=bool)
+    view["flowers"] = [
+        {
+            "tile": 34 + index,
+            "label": FLOWERS_JA[index],
+            "labelEnglish": FLOWERS_EN[index],
+        }
+        for index, value in enumerate(held)
+        if value
+    ]
+    return view
+
+
 def build_hand_view(state: State, player: int) -> Dict[str, Any]:
     hand_counts = np.array(state.players.hand[player])
     tiles = []
@@ -1142,6 +1262,18 @@ def build_hand_view(state: State, player: int) -> Dict[str, Any]:
         "drawTile": draw_tile,
         "separateLastDraw": should_separate,
     }
+
+
+def build_legal_actions_view_hk(state: Any, player: int) -> Dict[str, Any]:
+    view = build_legal_actions_view(state, player)
+    view["riichi"] = None
+    # The drawn tile is already separated and clickable in the HK hand. Keep
+    # declarations out of the response unless they are legal at this prompt.
+    view["tsumogiri"] = None
+    for action_name in ("tsumo", "ron", "pass"):
+        if not view[action_name]["enabled"]:
+            view[action_name] = None
+    return view
 
 
 def build_legal_actions_view(state: State, player: int) -> Dict[str, Any]:
@@ -1295,6 +1427,104 @@ def build_round_summary(
         honba=int(prev_state.round_state.honba),
         kyotaku=int(prev_state.round_state.kyotaku),
         is_game_end=is_game_end,
+    )
+
+
+def build_round_summary_hk(
+    prev_state: Any,
+    next_state: Any,
+    event: ActionEvent,
+    player_names: List[str],
+) -> RoundSummary:
+    rewards = [int(value) for value in np.array(next_state.rewards)]
+    reason = "abortive_draw_normal"
+    winners: List[WinnerSummary] = []
+    if event.action == HKAction.TSUMO:
+        reason = "tsumo"
+        winners.append(
+            summarise_winner_hk(
+                prev_state,
+                next_state,
+                player=event.player,
+                player_names=player_names,
+                winning_tile=int(prev_state.round_state.last_draw),
+                from_player=None,
+                is_self_draw=True,
+            )
+        )
+    elif event.action == HKAction.RON:
+        reason = "ron"
+        winners.append(
+            summarise_winner_hk(
+                prev_state,
+                next_state,
+                player=event.player,
+                player_names=player_names,
+                winning_tile=int(prev_state.round_state.target),
+                from_player=int(prev_state.round_state.last_player),
+                is_self_draw=False,
+            )
+        )
+    return RoundSummary(
+        reason=reason,
+        rewards=rewards,
+        winners=winners,
+        round_count=int(prev_state.round_state.round),
+        honba=0,
+        kyotaku=0,
+        is_game_end=bool(next_state.terminated),
+    )
+
+
+def summarise_winner_hk(
+    prev_state: Any,
+    next_state: Any,
+    *,
+    player: int,
+    player_names: List[str],
+    winning_tile: int,
+    from_player: Optional[int],
+    is_self_draw: bool,
+) -> WinnerSummary:
+    result = _score_result(
+        prev_state,
+        jnp.int8(player),
+        jnp.int8(winning_tile),
+        jnp.bool_(is_self_draw),
+        HKOS_V1,
+    )
+    patterns = np.array(result.patterns, dtype=bool)
+    english = [YAKU_NAMES_EN[index] for index in np.flatnonzero(patterns)]
+    japanese = [YAKU_NAMES_JA[index] for index in np.flatnonzero(patterns)]
+    flower_faan = int(result.flower_faan)
+    english.append(f"Flowers and seasons ({flower_faan} faan)")
+    japanese.append(f"花牌・季節牌 ({flower_faan}翻)")
+    if is_self_draw:
+        english.append("Self draw")
+        japanese.append("自摸")
+    if bool(prev_state.round_state.robbing_kong):
+        english.append("Robbing a kong")
+        japanese.append("搶槓")
+    if bool(prev_state.round_state.after_kong):
+        english.append("Kong replacement win")
+        japanese.append("槓上開花")
+    return WinnerSummary(
+        player=player,
+        name=player_names[player],
+        points_delta=int(np.array(next_state.rewards[player])),
+        fan=int(result.faan),
+        fu=0,
+        yaku=english,
+        yaku_japanese=japanese,
+        dora_count=0,
+        ura_dora_count=0,
+        dora_tiles=[],
+        ura_dora_tiles=[],
+        is_riichi=False,
+        yakuman=1 if bool(result.is_limit) else 0,
+        winning_tile=winning_tile if winning_tile >= 0 else None,
+        from_player=from_player,
+        show_dora=False,
     )
 
 
