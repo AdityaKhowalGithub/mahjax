@@ -23,6 +23,7 @@ log
 .venv
 *.out
 .venv
+.env
 *.sh
 *.o*
 workspace/*
